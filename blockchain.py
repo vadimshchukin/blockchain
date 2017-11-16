@@ -1,64 +1,146 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import base64
 import json
 import datetime
-import hashlib
+import hashlib # for SHA-256
 
-import ecdsa
+import ecdsa # Elliptic Curve Digital Signature Algorithm
 
 
 class Blockchain:
     def __init__(self, genesis_block_data=None):
-        self.blocks = [] # initialize the list of blocks
-        self.add_block(genesis_block_data) # add the genesis block
+        """
+        Initialize the blockchain with the genesis block.
+
+        :param genesis_block_data: Data to be put in the genesis (first) block of the blockchain.
+        """
+        self.blocks = []  # initialize the list of blocks
+        self.add_block(genesis_block_data)  # add the genesis block
 
     @staticmethod
     def hash_block(block):
-        return hashlib.sha256(json.dumps(block, sort_keys=True).encode()).hexdigest()
+        """
+        Encode the block to JSON and hashes it.
 
-    def add_block(self, block_data):
+
+        :param block: The block to hash.
+        :return: Hexadecimal string representation of SHA-256 hash of the block encoded in JSON.
+        """
+        # sort_keys=True is important for consistent results of JSON encoding:
+        return hashlib.sha256(json.dumps(block, sort_keys=True).encode()).hexdigest() # Secure Hash Algorithm
+
+    def mine_block(self, block_data):
+        """
+        Mine a new block to the end of the blockchain.
+
+        :param block_data: The data to be stored in the new block.
+        """
+
         block = {}
 
-        block['index'] = len(self.blocks)
-        block['timestamp'] = str(datetime.datetime.now())
-        block['data'] = block_data
+        block['index'] = len(self.blocks) # set the next consecutive block index
+        block['timestamp'] = str(datetime.datetime.now()) # store the current date and time
+        block['data'] = block_data # user data to be stored in the block
+        # set the previous hash if there are blocks in the blockchain or the default value otherwise:
         block['previous_hash'] = self.hash_block(self.blocks[-1]) if len(self.blocks) else 'none'
 
         # calculate the proof of work:
-        block['nonce'] = 0
-        while self.hash_block(block)[:3] != '000':
-            block['nonce'] += 1
+        block['nonce'] = 0 # initialize the nonce
+        while self.hash_block(block)[:3] != '000': # check that last 3 digits of the hash are zeroes
+            block['nonce'] += 1 # repeat until a required hash has been found
 
-        self.blocks.append(block)
+        self.blocks.append(block) # add the block to the chain
 
     def validate(self, start_block_index=1):
-        for block_index in range(start_block_index, len(self.blocks)):
+        """
+        Check the validity of the blockchain. Validate the hashes in the blockchain.
+
+        :param start_block_index: Block index to start validation from.
+        :return: True if the blockchain is valid.
+        """
+
+        for block_index in range(start_block_index, len(self.blocks)): # loop through all the required blocks
             block = self.blocks[block_index]
+            # hash the previous block and compare the hash with the hash stored in the current block:
             if block['previous_hash'] != self.hash_block(self.blocks[block_index - 1]):
                 return False
         return True
 
+
+class Wallet:
+    def __init__(self):
+        """
+        Initialize the wallet with private key and public key using ECDSA.
+        """
+
+        self.private_key = ecdsa.SigningKey.generate() # generate a random ECDSA private key (signing key)
+        self.public_key = self.private_key.get_verifying_key() # derive the public key from the private key
+
+    def get_private_key(self):
+        """
+        Encode the private key to Base64.
+
+        :return: Private key encoded in Base64.
+        """
+
+        return base64.b64encode(self.private_key.to_string()).decode()
+
+    def get_public_key(self):
+        """
+        Encode the public key to Base64.
+
+        :return: Public key encoded in Base64.
+        """
+
+        return base64.b64encode(self.public_key.to_string()).decode()
+
+
 class Cryptocurrency:
     def __init__(self):
-        self.blockchain = Blockchain({'transactions': []})
+        """
+        Initialize the blockchain and the list of transactions.
+        """
+
+        self.blockchain = Blockchain({'transactions': []}) # genesis block contains an empty list of transactions
         self.transactions = []
 
     def add_transaction(self, wallet, to, amount):
+        """
+        Add a new transaction to the list of current transactions.
+
+        :param wallet: The wallet to send the coins from.
+        :param to: The address to send the coins to.
+        :param amount: Amount of coins.
+        """
         transaction = {}
 
-        transaction['data'] = {}
-        transaction['data']['from'] = wallet.get_public_key()
+        transaction['data'] = {} # 'data' is used to split the transaction data from its signature
+        transaction['data']['from'] = wallet.get_public_key() # use the waller's public key as the sender's address
         transaction['data']['to'] = to
         transaction['data']['amount'] = amount
 
+        # encode the transaction data to JSON:
         transaction_data = json.dumps(transaction['data'], sort_keys=True).encode()
+        # sign the transaction data using the waller's private key:
         transaction['signature'] = base64.b64encode(wallet.private_key.sign(transaction_data)).decode()
 
-        self.transactions.append(transaction)
+        self.transactions.append(transaction) # add the transaction to the list
 
-    def add_block(self, reward_address):
-        self.transactions.append({'data': {'from': 'network', 'to': reward_address, 'amount': 10}, 'signature': 'reward'})
-        self.blockchain.add_block({'transactions': self.transactions})
-        self.transactions = []
+    def mine_block(self, reward_address):
+        """
+        Mine the next block of current transactions.
+
+        :param reward_address: the reward address for the coinbase transaction.
+        """
+
+        # add the reward (coinbase) transaction to the list of current transactions:
+        self.transactions.append(
+            {'data': {'from': 'network', 'to': reward_address, 'amount': 10}, 'signature': 'reward'})
+        # mine the next block and include it in the blockchain:
+        self.blockchain.mine_block({'transactions': self.transactions})
+        self.transactions = [] # clear out the transaction list
 
     def validate_blockchain(self, start_block_index=1):
         if not self.blockchain.validate(start_block_index):
@@ -86,52 +168,47 @@ class Cryptocurrency:
         return balance
 
 
-class Wallet:
-    def __init__(self):
-        self.private_key = ecdsa.SigningKey.generate()
-        self.public_key = self.private_key.get_verifying_key()
+class Application:
+    def run(self):
+        source_wallet = Wallet()
+        print('source wallet:')
+        print('  private key: {}'.format(source_wallet.get_private_key()))
+        print('  public  key: {}'.format(source_wallet.get_public_key()))
+        print()
 
-    def get_private_key(self):
-        return base64.b64encode(self.private_key.to_string()).decode()
+        target_wallet = Wallet()
+        print('target wallet:')
+        print('  private key: {}'.format(target_wallet.get_private_key()))
+        print('  public  key: {}'.format(target_wallet.get_public_key()))
+        print()
 
-    def get_public_key(self):
-        return base64.b64encode(self.public_key.to_string()).decode()
+        cryptocurrency = Cryptocurrency()
+        cryptocurrency.mine_block(source_wallet.get_public_key())
+        cryptocurrency.add_transaction(source_wallet, target_wallet.get_public_key(), 2.5)
+        cryptocurrency.add_transaction(source_wallet, target_wallet.get_public_key(), 3.5)
+        cryptocurrency.mine_block(source_wallet.get_public_key())
+        if cryptocurrency.validate_blockchain():
+            print('blockchain is valid')
+        print()
+
+        print('blockchain:')
+        print('{: <5} {: <26} {}'.format('index', 'timestamp', 'previous_hash'))
+        for block in cryptocurrency.blockchain.blocks:
+            print('{: <5} {} {: <64}'.format(block['index'], block['timestamp'], block['previous_hash']))
+            if len(block['data']['transactions']):
+                print('  transactions:')
+                print('  {: <64} {: <64} {: <6} {}'.format('from', 'to', 'amount', 'signature'))
+            for transaction in block['data']['transactions']:
+                transaction_data = transaction['data']
+                print('  {: <64} {} {: <6} {}'.format(transaction_data['from'], transaction_data['to'],
+                                                      transaction_data['amount'], transaction['signature']))
+        print()
+
+        print('source wallet:')
+        print('  balance: {}'.format(cryptocurrency.calculate_balance(source_wallet.get_public_key())))
+        print('target wallet:')
+        print('  balance: {}'.format(cryptocurrency.calculate_balance(target_wallet.get_public_key())))
 
 
-source_wallet = Wallet()
-print('source wallet:')
-print('  public  key: {}'.format(source_wallet.get_private_key()))
-print('  private key: {}'.format(source_wallet.get_public_key()))
-print()
-
-target_wallet = Wallet()
-print('target wallet:')
-print('  public  key: {}'.format(target_wallet.get_private_key()))
-print('  private key: {}'.format(target_wallet.get_public_key()))
-print()
-
-cryptocurrency = Cryptocurrency()
-cryptocurrency.add_block(source_wallet.get_public_key())
-cryptocurrency.add_transaction(source_wallet, target_wallet.get_public_key(), 2.5)
-cryptocurrency.add_transaction(source_wallet, target_wallet.get_public_key(), 3.5)
-cryptocurrency.add_block(source_wallet.get_public_key())
-if cryptocurrency.validate_blockchain():
-    print('blockchain is valid')
-print()
-
-print('blockchain:')
-print('{: <5} {: <26} {}'.format('index', 'timestamp', 'previous_hash'))
-for block in cryptocurrency.blockchain.blocks:
-    print('{: <5} {} {: <64}'.format(block['index'], block['timestamp'], block['previous_hash']))
-    if len(block['data']['transactions']):
-        print('  transactions:')
-        print('  {: <64} {: <64} {: <6} {}'.format('from', 'to', 'amount', 'signature'))
-    for transaction in block['data']['transactions']:
-        transaction_data = transaction['data']
-        print('  {: <64} {} {: <6} {}'.format(transaction_data['from'], transaction_data['to'], transaction_data['amount'], transaction['signature']))
-print()
-
-print('source wallet:')
-print('  balance: {}'.format(cryptocurrency.calculate_balance(source_wallet.get_public_key())))
-print('target wallet:')
-print('  balance: {}'.format(cryptocurrency.calculate_balance(target_wallet.get_public_key())))
+if __name__ == '__main__':
+    Application().run()
