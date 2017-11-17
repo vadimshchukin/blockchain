@@ -17,7 +17,7 @@ class Blockchain:
         :param genesis_block_data: Data to be put in the genesis (first) block of the blockchain.
         """
         self.blocks = []  # initialize the list of blocks
-        self.add_block(genesis_block_data)  # add the genesis block
+        self.mine_block(genesis_block_data)  # add the genesis block
 
     @staticmethod
     def hash_block(block):
