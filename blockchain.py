@@ -55,7 +55,7 @@ class Blockchain:
 
     def validate(self, start_block_index=1):
         """
-        Check the validity of the blockchain. Validate hashes in the blockchain.
+        Check the validity of the blockchain. Validate hashes and proofs of work in the blockchain.
 
         :param start_block_index: Block index to start validation from.
         :return: True if the blockchain is valid.
@@ -65,6 +65,8 @@ class Blockchain:
             block = self.blocks[block_index]
             # hash the previous block and compare the hash with the hash stored in the current block:
             if block['previous_hash'] != self.hash_block(self.blocks[block_index - 1]):
+                return False
+            if self.hash_block(block)[:3] != '000':  # check the nonce
                 return False
         return True
 
