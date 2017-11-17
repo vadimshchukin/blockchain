@@ -235,13 +235,13 @@ class Application:
             print('{: <5} {} {: <64}'.format(block['index'], block['timestamp'], block['previous_hash']))
 
             # format and print transaction data:
-            if len(block['data']['transactions']):
-                print('  transactions:')
-                print('  {: <64} {: <64} {: <6} {}'.format('from', 'to', 'amount', 'signature'))
-            for transaction in block['data']['transactions']:
-                transaction_data = transaction['data']
-                print('  {: <64} {} {: <6} {}'.format(transaction_data['from'], transaction_data['to'],
-                                                      transaction_data['amount'], transaction['signature']))
+            for transaction_index in range(len(block['data']['transactions'])):
+                transaction = block['data']['transactions'][transaction_index]
+                print('  transaction {}:'.format(transaction_index + 1))
+                print('    from     : {}'.format(transaction['data']['from']))
+                print('    to       : {}'.format(transaction['data']['to']))
+                print('    amount   : {}'.format(transaction['data']['amount']))
+                print('    signature: {}'.format(transaction['signature']))
         print()
 
         # print wallet balances:
